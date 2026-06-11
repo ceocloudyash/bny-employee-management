@@ -1,62 +1,91 @@
-
 <?php
+ob_start();
 
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-if(!isset($_SESSION['username']))
-{
-    header("Location:index.php");
+if (
+    !isset($_SESSION['username']) ||
+    $_SESSION['role'] != 'CEO'
+) {
+    header("Location: index.php");
     exit();
 }
 
 include 'db.php';
 
-$result = $conn->query(
-"SELECT * FROM leave_requests
-ORDER BY id DESC"
-);
+/* FETCH LEAVE REQUESTS */
 
-$total = $conn->query(
-"SELECT COUNT(*) AS total
-FROM leave_requests"
-);
+$result = $conn->query("
+    SELECT *
+    FROM leave_requests
+    ORDER BY id DESC
+");
 
-$total_count =
-$total->fetch_assoc()['total'];
+/* TOTAL */
 
-$pending = $conn->query(
-"SELECT COUNT(*) AS total
-FROM leave_requests
-WHERE status='Pending'"
-);
+$total_result = $conn->query("
+    SELECT COUNT(*) AS total
+    FROM leave_requests
+");
 
-$pending_count =
-$pending->fetch_assoc()['total'];
+$total_count = 0;
 
-$approved = $conn->query(
-"SELECT COUNT(*) AS total
-FROM leave_requests
-WHERE status='Approved'"
-);
+if ($total_result) {
+    $total_count = $total_result->fetch_assoc()['total'];
+}
 
-$approved_count =
-$approved->fetch_assoc()['total'];
+/* PENDING */
 
-$rejected = $conn->query(
-"SELECT COUNT(*) AS total
-FROM leave_requests
-WHERE status='Rejected'"
-);
+$pending_result = $conn->query("
+    SELECT COUNT(*) AS total
+    FROM leave_requests
+    WHERE status='Pending'
+");
 
-$rejected_count =
-$rejected->fetch_assoc()['total'];
+$pending_count = 0;
 
+if ($pending_result) {
+    $pending_count = $pending_result->fetch_assoc()['total'];
+}
+
+/* APPROVED */
+
+$approved_result = $conn->query("
+    SELECT COUNT(*) AS total
+    FROM leave_requests
+    WHERE status='Approved'
+");
+
+$approved_count = 0;
+
+if ($approved_result) {
+    $approved_count = $approved_result->fetch_assoc()['total'];
+}
+
+/* REJECTED */
+
+$rejected_result = $conn->query("
+    SELECT COUNT(*) AS total
+    FROM leave_requests
+    WHERE status='Rejected'
+");
+
+$rejected_count = 0;
+
+if ($rejected_result) {
+    $rejected_count = $rejected_result->fetch_assoc()['total'];
+}
 ?>
 
 <!DOCTYPE html>
 <html>
 
 <head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>Leave Requests</title>
 
@@ -65,7 +94,7 @@ $rejected->fetch_assoc()['total'];
 body{
 background:#020617;
 color:white;
-font-family:Segoe UI;
+font-family:'Segoe UI',sans-serif;
 padding:30px;
 margin:0;
 }
@@ -74,12 +103,12 @@ margin:0;
 display:flex;
 justify-content:space-between;
 align-items:center;
-margin-bottom:20px;
+margin-bottom:25px;
 }
 
 h1{
-color:#22d3ee;
 margin:0;
+color:#22d3ee;
 }
 
 .dashboard-btn{
@@ -97,15 +126,16 @@ background:#16a34a;
 .cards{
 display:flex;
 gap:20px;
-margin-bottom:25px;
 flex-wrap:wrap;
+margin-bottom:25px;
 }
 
 .card{
 background:#1e293b;
 padding:20px;
 border-radius:12px;
-min-width:180px;
+min-width:200px;
+box-shadow:0 0 15px rgba(0,0,0,.2);
 }
 
 .card h3{
@@ -115,7 +145,8 @@ color:#22d3ee;
 
 .card p{
 font-size:28px;
-margin:10px 0 0;
+margin-top:10px;
+font-weight:bold;
 }
 
 table{
@@ -141,22 +172,6 @@ tr:hover{
 background:#273449;
 }
 
-.approve{
-background:#22c55e;
-padding:8px 12px;
-text-decoration:none;
-border-radius:8px;
-color:white;
-}
-
-.reject{
-background:#ef4444;
-padding:8px 12px;
-text-decoration:none;
-border-radius:8px;
-color:white;
-}
-
 .pending{
 color:#facc15;
 font-weight:bold;
@@ -172,6 +187,31 @@ color:#ef4444;
 font-weight:bold;
 }
 
+.approve{
+background:#22c55e;
+padding:8px 12px;
+border-radius:8px;
+text-decoration:none;
+color:white;
+margin-right:5px;
+}
+
+.reject{
+background:#ef4444;
+padding:8px 12px;
+border-radius:8px;
+text-decoration:none;
+color:white;
+}
+
+.approve:hover{
+background:#16a34a;
+}
+
+.reject:hover{
+background:#dc2626;
+}
+
 </style>
 
 </head>
@@ -182,7 +222,7 @@ font-weight:bold;
 
 <h1>📝 Leave Requests</h1>
 
-<a class="dashboard-btn" href="dashboard.php">
+<a href="dashboard.php" class="dashboard-btn">
 🏠 Dashboard
 </a>
 
@@ -215,42 +255,39 @@ font-weight:bold;
 <table>
 
 <tr>
-
 <th>Employee</th>
 <th>From</th>
 <th>To</th>
 <th>Reason</th>
 <th>Status</th>
 <th>Action</th>
-
 </tr>
 
 <?php
-
-while($row = $result->fetch_assoc())
+if ($result && $result->num_rows > 0)
 {
-
+    while($row = $result->fetch_assoc())
+    {
 ?>
-
 <tr>
 
-<td><?php echo $row['employee_name']; ?></td>
+<td><?php echo htmlspecialchars($row['employee_name']); ?></td>
 
-<td><?php echo $row['leave_from']; ?></td>
+<td><?php echo htmlspecialchars($row['leave_from']); ?></td>
 
-<td><?php echo $row['leave_to']; ?></td>
+<td><?php echo htmlspecialchars($row['leave_to']); ?></td>
 
-<td><?php echo $row['reason']; ?></td>
+<td><?php echo htmlspecialchars($row['reason']); ?></td>
 
 <td>
 
 <?php
 
-if($row['status']=="Approved")
+if($row['status'] == 'Approved')
 {
     echo "<span class='approved'>Approved</span>";
 }
-elseif($row['status']=="Rejected")
+elseif($row['status'] == 'Rejected')
 {
     echo "<span class='rejected'>Rejected</span>";
 }
@@ -265,35 +302,53 @@ else
 
 <td>
 
+<?php if($row['status'] == 'Pending') { ?>
+
 <a
 class="approve"
 href="approve_leave.php?id=<?php echo $row['id']; ?>">
-
 ✅ Approve
-
 </a>
 
 <a
 class="reject"
 href="reject_leave.php?id=<?php echo $row['id']; ?>">
-
 ❌ Reject
-
 </a>
+
+<?php } else { ?>
+
+—
+
+<?php } ?>
 
 </td>
 
 </tr>
 
 <?php
-
+    }
 }
+else
+{
+?>
 
+<tr>
+<td colspan="6">
+No Leave Requests Found
+</td>
+</tr>
+
+<?php
+}
 ?>
 
 </table>
 
 </body>
-
 </html>
 
+<?php
+$conn->close();
+ob_end_flush();
+?>
