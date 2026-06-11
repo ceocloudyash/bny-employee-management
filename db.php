@@ -8,8 +8,8 @@ $port = (int)($_ENV['DB_PORT'] ?? 3306);
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-try {
-
+try
+{
     $conn = new mysqli(
         $host,
         $user,
@@ -19,9 +19,14 @@ try {
     );
 
     $conn->set_charset("utf8mb4");
-
-} catch (Exception $e) {
-
-    die("Database Error: " . $e->getMessage());
-
 }
+catch (Exception $e)
+{
+    die(
+        "<h3 style='font-family:Segoe UI;color:red'>
+        Database Error:
+        " . htmlspecialchars($e->getMessage()) . "
+        </h3>"
+    );
+}
+?>
