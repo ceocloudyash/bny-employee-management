@@ -1,11 +1,12 @@
-
 <?php
+ob_start();
 
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-if(!isset($_SESSION['employee_id']))
-{
-    header("Location:index.php");
+if (!isset($_SESSION['employee_id'])) {
+    header("Location: index.php");
     exit();
 }
 
@@ -14,49 +15,53 @@ include 'db.php';
 $employee_id = $_SESSION['employee_id'];
 $employee_name = $_SESSION['employee_name'];
 
-$result = $conn->query(
-"SELECT *
-FROM attendance
-WHERE employee_id='$employee_id'
-ORDER BY attendance_date DESC"
-);
+$present_count = 0;
+$absent_count = 0;
+$total_records = 0;
+$attendance_percentage = 0;
 
-$present = $conn->query(
-"SELECT COUNT(*) as total
-FROM attendance
-WHERE employee_id='$employee_id'
-AND status='Present'"
-);
+$result = $conn->query("
+    SELECT *
+    FROM attendance
+    WHERE employee_id='$employee_id'
+    ORDER BY attendance_date DESC
+");
 
-$present_count = $present->fetch_assoc()['total'];
+$present = $conn->query("
+    SELECT COUNT(*) AS total
+    FROM attendance
+    WHERE employee_id='$employee_id'
+    AND status='Present'
+");
 
-$absent = $conn->query(
-"SELECT COUNT(*) as total
-FROM attendance
-WHERE employee_id='$employee_id'
-AND status='Absent'"
-);
+if ($present) {
+    $present_count = $present->fetch_assoc()['total'];
+}
 
-$absent_count = $absent->fetch_assoc()['total'];
+$absent = $conn->query("
+    SELECT COUNT(*) AS total
+    FROM attendance
+    WHERE employee_id='$employee_id'
+    AND status='Absent'
+");
+
+if ($absent) {
+    $absent_count = $absent->fetch_assoc()['total'];
+}
 
 $total_records = $present_count + $absent_count;
 
-if($total_records > 0)
-{
+if ($total_records > 0) {
     $attendance_percentage =
     round(($present_count / $total_records) * 100, 2);
 }
-else
-{
-    $attendance_percentage = 0;
-}
-
 ?>
-
 <!DOCTYPE html>
 <html>
-
 <head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>My Attendance</title>
 
@@ -104,8 +109,8 @@ margin-bottom:20px;
 .cards{
 display:flex;
 gap:20px;
-margin-bottom:20px;
 flex-wrap:wrap;
+margin-bottom:20px;
 }
 
 .card{
@@ -129,12 +134,10 @@ table{
 width:100%;
 border-collapse:collapse;
 background:#1e293b;
-border-radius:12px;
-overflow:hidden;
 }
 
 th,td{
-padding:15px;
+padding:12px;
 border:1px solid #334155;
 text-align:center;
 }
@@ -142,10 +145,6 @@ text-align:center;
 th{
 background:#0f172a;
 color:#22d3ee;
-}
-
-tr:hover{
-background:#273449;
 }
 
 .present{
@@ -168,7 +167,7 @@ font-weight:bold;
 
 <h1>📅 My Attendance</h1>
 
-<a class="dashboard-btn" href="employee_dashboard.php">
+<a href="employee_dashboard.php" class="dashboard-btn">
 🏠 Dashboard
 </a>
 
@@ -177,12 +176,12 @@ font-weight:bold;
 <div class="employee-card">
 
 <b>Employee ID:</b>
-<?php echo $employee_id; ?>
+<?php echo htmlspecialchars($employee_id); ?>
 
 <br><br>
 
 <b>Employee Name:</b>
-<?php echo $employee_name; ?>
+<?php echo htmlspecialchars($employee_name); ?>
 
 </div>
 
@@ -213,21 +212,18 @@ font-weight:bold;
 <table>
 
 <tr>
-
 <th>Date</th>
 <th>Check In</th>
 <th>Check Out</th>
 <th>Status</th>
-
 </tr>
 
 <?php
-
-while($row = $result->fetch_assoc())
+if ($result && $result->num_rows > 0)
 {
-
+    while($row = $result->fetch_assoc())
+    {
 ?>
-
 <tr>
 
 <td><?php echo $row['attendance_date']; ?></td>
@@ -237,9 +233,7 @@ while($row = $result->fetch_assoc())
 <td><?php echo $row['check_out']; ?></td>
 
 <td>
-
 <?php
-
 if($row['status'] == 'Present')
 {
     echo "<span class='present'>✅ Present</span>";
@@ -248,21 +242,29 @@ else
 {
     echo "<span class='absent'>❌ Absent</span>";
 }
-
 ?>
-
 </td>
 
 </tr>
-
 <?php
-
+    }
 }
-
+else
+{
+?>
+<tr>
+<td colspan="4">No attendance records found.</td>
+</tr>
+<?php
+}
 ?>
 
 </table>
 
 </body>
-
 </html>
+
+<?php
+$conn->close();
+ob_end_flush();
+?>
