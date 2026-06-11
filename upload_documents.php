@@ -3,36 +3,39 @@
 ob_start();
 session_start();
 
-if (!isset($_SESSION['role']))
-{
+if (!isset($_SESSION['role'])) {
     header("Location: index.php");
     exit();
 }
 
 include 'db.php';
 
-if (!file_exists("uploads"))
-{
+/* CREATE FOLDERS */
+
+if (!is_dir("uploads")) {
     mkdir("uploads", 0777, true);
 }
 
-if (!file_exists("uploads/documents"))
-{
+if (!is_dir("uploads/documents")) {
     mkdir("uploads/documents", 0777, true);
 }
 
-/* EMPLOYEE ID */
+/* GET EMPLOYEE ID */
 
-if (isset($_GET['id']))
-{
+if (isset($_GET['id']) && !empty($_GET['id'])) {
+
     $employee_id = $_GET['id'];
-}
-elseif ($_SESSION['role'] == 'EMPLOYEE')
-{
+
+} elseif (
+    isset($_SESSION['role']) &&
+    $_SESSION['role'] == "EMPLOYEE" &&
+    isset($_SESSION['employee_id'])
+) {
+
     $employee_id = $_SESSION['employee_id'];
-}
-else
-{
+
+} else {
+
     die("Employee ID Not Found");
 }
 
@@ -40,121 +43,167 @@ $message = "";
 
 /* UPLOAD DOCUMENT */
 
-if (isset($_POST['upload']))
-{
+if (isset($_POST['upload'])) {
+
     $document_name = trim($_POST['document_name']);
     $document_type = trim($_POST['document_type']);
 
-    if (!empty($_FILES['document']['name']))
-    {
+    if (
+        isset($_FILES['document']) &&
+        $_FILES['document']['error'] == 0
+    ) {
+
         $file_name =
-        time() . "_" .
-        basename($_FILES['document']['name']);
+            time() . "_" .
+            preg_replace(
+                "/[^a-zA-Z0-9._-]/",
+                "_",
+                $_FILES['document']['name']
+            );
 
         $target =
-        "uploads/documents/" .
-        $file_name;
+            "uploads/documents/" .
+            $file_name;
 
         if (
-        move_uploaded_file(
-        $_FILES['document']['tmp_name'],
-        $target
-        ))
-        {
-            $stmt = $conn->prepare(
-            "INSERT INTO employee_documents
-            (
-            employee_id,
-            document_name,
-            document_type,
-            file_name
+            move_uploaded_file(
+                $_FILES['document']['tmp_name'],
+                $target
             )
-            VALUES
-            (?,?,?,?)"
+        ) {
+
+            $stmt = $conn->prepare(
+                "INSERT INTO employee_documents
+                (
+                    employee_id,
+                    document_name,
+                    document_type,
+                    file_name
+                )
+                VALUES
+                (
+                    ?, ?, ?, ?
+                )"
             );
 
             $stmt->bind_param(
-            "ssss",
-            $employee_id,
-            $document_name,
-            $document_type,
-            $file_name
+                "ssss",
+                $employee_id,
+                $document_name,
+                $document_type,
+                $file_name
             );
 
-            if ($stmt->execute())
-            {
+            if ($stmt->execute()) {
+
                 $message =
                 "✅ Document Uploaded Successfully";
-            }
-            else
-            {
+
+            } else {
+
                 $message =
                 "❌ Database Insert Failed";
             }
-        }
-        else
-        {
+
+            $stmt->close();
+
+        } else {
+
             $message =
             "❌ File Upload Failed";
         }
+
+    } else {
+
+        $message =
+        "❌ Please Select A File";
     }
 }
 
 /* DELETE DOCUMENT */
 
 if (
-isset($_GET['delete'])
-&&
-$_SESSION['role'] == 'CEO'
-)
-{
-    $delete_id = (int)$_GET['delete'];
+    isset($_GET['delete']) &&
+    $_SESSION['role'] == "CEO"
+) {
 
-    $result =
-    $conn->query(
-    "SELECT * FROM employee_documents
-    WHERE id='$delete_id'"
+    $delete_id = intval($_GET['delete']);
+
+    $stmt = $conn->prepare(
+        "SELECT file_name
+        FROM employee_documents
+        WHERE id=?"
     );
 
-    if ($result && $result->num_rows > 0)
-    {
-        $doc = $result->fetch_assoc();
+    $stmt->bind_param(
+        "i",
+        $delete_id
+    );
+
+    $stmt->execute();
+
+    $result =
+    $stmt->get_result();
+
+    if ($result->num_rows > 0) {
+
+        $doc =
+        $result->fetch_assoc();
 
         $filepath =
         "uploads/documents/" .
         $doc['file_name'];
 
-        if (file_exists($filepath))
-        {
+        if (file_exists($filepath)) {
+
             unlink($filepath);
         }
 
-        $conn->query(
-        "DELETE FROM employee_documents
-        WHERE id='$delete_id'"
+        $deleteStmt =
+        $conn->prepare(
+            "DELETE FROM employee_documents
+            WHERE id=?"
         );
+
+        $deleteStmt->bind_param(
+            "i",
+            $delete_id
+        );
+
+        $deleteStmt->execute();
+        $deleteStmt->close();
     }
 
     header(
-    "Location: upload_documents.php?id=$employee_id"
+        "Location: upload_documents.php?id=" .
+        urlencode($employee_id)
     );
+
     exit();
 }
 
 /* FETCH DOCUMENTS */
 
-$documents =
-$conn->query(
-"SELECT *
-FROM employee_documents
-WHERE employee_id='$employee_id'
-ORDER BY id DESC"
+$stmt = $conn->prepare(
+    "SELECT *
+    FROM employee_documents
+    WHERE employee_id=?
+    ORDER BY id DESC"
 );
+
+$stmt->bind_param(
+    "s",
+    $employee_id
+);
+
+$stmt->execute();
+
+$documents =
+$stmt->get_result();
 
 ?>
 
 <!DOCTYPE html>
-
 <html>
 
 <head>
@@ -167,14 +216,15 @@ ORDER BY id DESC"
 
 body{
 background:#020617;
-font-family:Segoe UI,sans-serif;
 color:white;
+font-family:Segoe UI;
 padding:20px;
 margin:0;
 }
 
 h1{
 color:#22d3ee;
+margin-bottom:20px;
 }
 
 .card{
@@ -191,20 +241,29 @@ padding:12px;
 margin:10px 0;
 border:none;
 border-radius:8px;
+background:#0f172a;
+color:white;
 box-sizing:border-box;
 }
 
 button{
 padding:12px 20px;
 background:#06b6d4;
+color:white;
 border:none;
 border-radius:8px;
-color:white;
 cursor:pointer;
 }
 
 button:hover{
 background:#0891b2;
+}
+
+.success{
+background:#14532d;
+padding:12px;
+border-radius:8px;
+margin-bottom:15px;
 }
 
 table{
@@ -226,16 +285,14 @@ padding:15px;
 border-bottom:1px solid #334155;
 }
 
-a{
-text-decoration:none;
-}
-
 .download{
 color:#22d3ee;
+text-decoration:none;
 }
 
 .delete{
 color:#ef4444;
+text-decoration:none;
 }
 
 .back{
@@ -244,14 +301,8 @@ margin-top:20px;
 padding:10px 15px;
 background:#06b6d4;
 color:white;
+text-decoration:none;
 border-radius:8px;
-}
-
-.success{
-background:#14532d;
-padding:12px;
-border-radius:8px;
-margin-bottom:15px;
 }
 
 </style>
@@ -263,8 +314,7 @@ margin-bottom:15px;
 <h1>📄 Employee Documents</h1>
 
 <?php
-if($message != "")
-{
+if (!empty($message)) {
     echo "<div class='success'>$message</div>";
 }
 ?>
@@ -273,7 +323,9 @@ if($message != "")
 
 <form method="POST" enctype="multipart/form-data">
 
-<select name="document_type" required>
+<select
+name="document_type"
+required>
 
 <option value="">
 Select Document Type
@@ -320,8 +372,7 @@ name="upload">
 <th>Name</th>
 <th>Download</th>
 
-<?php if($_SESSION['role']=="CEO"){ ?>
-
+<?php if ($_SESSION['role'] == "CEO") { ?>
 <th>Delete</th>
 <?php } ?>
 
@@ -329,10 +380,9 @@ name="upload">
 
 <?php
 
-if($documents && $documents->num_rows > 0)
-{
-while($doc = $documents->fetch_assoc())
-{
+if ($documents && $documents->num_rows > 0) {
+
+    while ($doc = $documents->fetch_assoc()) {
 
 ?>
 
@@ -340,15 +390,15 @@ while($doc = $documents->fetch_assoc())
 
 <td><?php echo $doc['id']; ?></td>
 
-<td><?php echo $doc['document_type']; ?></td>
+<td><?php echo htmlspecialchars($doc['document_type']); ?></td>
 
-<td><?php echo $doc['document_name']; ?></td>
+<td><?php echo htmlspecialchars($doc['document_name']); ?></td>
 
 <td>
 
 <a
 class="download"
-href="uploads/documents/<?php echo $doc['file_name']; ?>"
+href="uploads/documents/<?php echo urlencode($doc['file_name']); ?>"
 download>
 
 ⬇ Download
@@ -357,14 +407,14 @@ download>
 
 </td>
 
-<?php if($_SESSION['role']=="CEO"){ ?>
+<?php if ($_SESSION['role'] == "CEO") { ?>
 
 <td>
 
 <a
 class="delete"
-href="upload_documents.php?id=<?php echo $employee_id; ?>&delete=<?php echo $doc['id']; ?>"
-onclick="return confirm('Delete this document?');">
+href="upload_documents.php?id=<?php echo urlencode($employee_id); ?>&delete=<?php echo $doc['id']; ?>"
+onclick="return confirm('Delete this document?')">
 
 🗑 Delete
 
@@ -378,17 +428,18 @@ onclick="return confirm('Delete this document?');">
 
 <?php
 
-}
-}
-else
-{
+    }
+
+} else {
 
 ?>
 
 <tr>
+
 <td colspan="5" style="text-align:center;">
 No Documents Uploaded
 </td>
+
 </tr>
 
 <?php
@@ -401,7 +452,7 @@ No Documents Uploaded
 
 <br>
 
-<?php if($_SESSION['role']=="CEO"){ ?>
+<?php if ($_SESSION['role'] == "CEO") { ?>
 
 <a
 class="back"
@@ -424,5 +475,4 @@ href="employee_dashboard.php">
 <?php } ?>
 
 </body>
-
 </html>
