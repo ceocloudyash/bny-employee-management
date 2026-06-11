@@ -1,56 +1,60 @@
-
 <?php
+ob_start();
 
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-if(!isset($_SESSION['employee_id']))
-{
-    header("Location:index.php");
+if (!isset($_SESSION['employee_id'])) {
+    header("Location: index.php");
     exit();
 }
 
 include 'db.php';
 
-$msg = "";
+$message = "";
 
-if(isset($_POST['apply']))
-{
-    $employee_id = $_SESSION['employee_id'];
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+
+    $employee_id   = $_SESSION['employee_id'];
     $employee_name = $_SESSION['employee_name'];
 
-    $leave_from = $_POST['leave_from'];
-    $leave_to = $_POST['leave_to'];
-    $reason = $_POST['reason'];
+    $leave_from = trim($_POST['leave_from']);
+    $leave_to   = trim($_POST['leave_to']);
+    $reason     = trim($_POST['reason']);
 
-    $sql = "INSERT INTO leave_requests
-    (
-    employee_id,
-    employee_name,
-    leave_from,
-    leave_to,
-    reason
-    )
-    VALUES
-    (
-    '$employee_id',
-    '$employee_name',
-    '$leave_from',
-    '$leave_to',
-    '$reason'
-    )";
+    $stmt = $conn->prepare(
+        "INSERT INTO leave_requests
+        (employee_id, employee_name, leave_from, leave_to, reason)
+        VALUES (?, ?, ?, ?, ?)"
+    );
 
-    if($conn->query($sql))
-    {
-        $msg = "✅ Leave Applied Successfully";
+    $stmt->bind_param(
+        "sssss",
+        $employee_id,
+        $employee_name,
+        $leave_from,
+        $leave_to,
+        $reason
+    );
+
+    if ($stmt->execute()) {
+        $message = "✅ Leave Applied Successfully";
+    } else {
+        $message = "❌ Failed To Apply Leave";
     }
-}
 
+    $stmt->close();
+}
 ?>
 
 <!DOCTYPE html>
 <html>
 
 <head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>Apply Leave</title>
 
@@ -59,9 +63,18 @@ if(isset($_POST['apply']))
 body{
 background:#020617;
 color:white;
-font-family:Segoe UI;
-padding:30px;
+font-family:'Segoe UI',sans-serif;
 margin:0;
+padding:30px;
+}
+
+.container{
+max-width:800px;
+margin:auto;
+background:#1e293b;
+padding:30px;
+border-radius:20px;
+box-shadow:0 0 25px rgba(0,0,0,.3);
 }
 
 .top-bar{
@@ -70,41 +83,33 @@ justify-content:space-between;
 margin-bottom:20px;
 }
 
-.dashboard-btn,
-.back-btn{
+.btn{
 padding:10px 15px;
 text-decoration:none;
-color:white;
 border-radius:8px;
+color:white;
+font-weight:bold;
 }
 
-.dashboard-btn{
-background:#22c55e;
-}
-
-.dashboard-btn:hover{
-background:#16a34a;
-}
-
-.back-btn{
+.back{
 background:#06b6d4;
 }
 
-.back-btn:hover{
+.back:hover{
 background:#0891b2;
 }
 
-.box{
-max-width:700px;
-margin:auto;
-background:#1e293b;
-padding:30px;
-border-radius:20px;
+.dashboard{
+background:#22c55e;
+}
+
+.dashboard:hover{
+background:#16a34a;
 }
 
 h1{
 color:#22d3ee;
-margin-top:0;
+margin-bottom:20px;
 }
 
 .info{
@@ -121,33 +126,40 @@ border-radius:10px;
 margin-bottom:15px;
 }
 
-input,
-textarea{
-width:100%;
+.error{
+background:#7f1d1d;
 padding:12px;
-margin-bottom:15px;
-background:#0f172a;
-border:none;
-color:white;
 border-radius:10px;
-box-sizing:border-box;
+margin-bottom:15px;
 }
 
 label{
 display:block;
 margin-bottom:8px;
+margin-top:15px;
+}
+
+input,
+textarea{
+width:100%;
+padding:12px;
+border:none;
+border-radius:10px;
+background:#0f172a;
+color:white;
+box-sizing:border-box;
 }
 
 button{
 width:100%;
 padding:15px;
+margin-top:20px;
 background:#22d3ee;
 border:none;
-color:black;
-font-weight:bold;
 border-radius:10px;
-cursor:pointer;
 font-size:16px;
+font-weight:bold;
+cursor:pointer;
 }
 
 button:hover{
@@ -160,68 +172,60 @@ background:#06b6d4;
 
 <body>
 
+<div class="container">
+
 <div class="top-bar">
 
-<a class="back-btn" href="employee_dashboard.php">
+<a href="employee_dashboard.php" class="btn back">
 ⬅ Back
 </a>
 
-<a class="dashboard-btn" href="employee_dashboard.php">
+<a href="employee_dashboard.php" class="btn dashboard">
 🏠 Dashboard
 </a>
 
 </div>
 
-<div class="box">
-
 <h1>📝 Apply Leave</h1>
 
 <div class="info">
 <b>Employee ID:</b>
-<?php echo $_SESSION['employee_id']; ?>
+<?php echo htmlspecialchars($_SESSION['employee_id']); ?>
 </div>
 
 <div class="info">
 <b>Employee Name:</b>
-<?php echo $_SESSION['employee_name']; ?>
+<?php echo htmlspecialchars($_SESSION['employee_name']); ?>
 </div>
 
-<?php
-if($msg != "")
-{
-    echo "<div class='success'>$msg</div>";
-}
-?>
+<?php if ($message != "") { ?>
+<div class="success">
+<?php echo $message; ?>
+</div>
+<?php } ?>
 
 <form method="POST">
 
 <label>Leave From</label>
-
 <input
 type="date"
 name="leave_from"
 required>
 
 <label>Leave To</label>
-
 <input
 type="date"
 name="leave_to"
 required>
 
 <label>Reason</label>
-
 <textarea
 name="reason"
 rows="5"
 required></textarea>
 
-<button
-type="submit"
-name="apply">
-
+<button type="submit">
 📨 Apply Leave
-
 </button>
 
 </form>
@@ -232,3 +236,7 @@ name="apply">
 
 </html>
 
+<?php
+$conn->close();
+ob_end_flush();
+?>
