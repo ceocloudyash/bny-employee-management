@@ -1,28 +1,28 @@
 <?php
 
-echo "<pre>";
-print_r($_ENV);
-echo "</pre>";
+$host = $_ENV['DB_HOST'] ?? '';
+$user = $_ENV['DB_USER'] ?? '';
+$pass = $_ENV['DB_PASS'] ?? '';
+$db   = $_ENV['DB_NAME'] ?? '';
+$port = (int)($_ENV['DB_PORT'] ?? 3306);
 
-exit();<?php
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-echo "<pre>";
+try {
 
-echo "GETENV HOST = ";
-var_dump(getenv('DB_HOST'));
+    $conn = new mysqli(
+        $host,
+        $user,
+        $pass,
+        $db,
+        $port
+    );
 
-echo "\n\n_ENV HOST = ";
-var_dump($_ENV['DB_HOST'] ?? null);
+    $conn->set_charset("utf8mb4");
 
-echo "\n\n_SERVER HOST = ";
-var_dump($_SERVER['DB_HOST'] ?? null);
+} catch (Exception $e) {
 
-echo "\n\nAll ENV:\n";
-print_r($_ENV);
+    die("Database Error: " . $e->getMessage());
 
-echo "\n\nAll SERVER:\n";
-print_r($_SERVER);
-
-echo "</pre>";
-
-exit;
+}
+?>
