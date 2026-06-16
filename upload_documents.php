@@ -4,7 +4,7 @@ ob_start();
 session_start();
 
 if (!isset($_SESSION['role'])) {
-    header("Location: index.php");
+    header("Location:index.php");
     exit();
 }
 
@@ -12,11 +12,11 @@ include 'db.php';
 
 /* CREATE FOLDERS */
 
-if (!is_dir("uploads")) {
+if (!file_exists("uploads")) {
     mkdir("uploads", 0777, true);
 }
 
-if (!is_dir("uploads/documents")) {
+if (!file_exists("uploads/documents")) {
     mkdir("uploads/documents", 0777, true);
 }
 
@@ -27,7 +27,6 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
     $employee_id = $_GET['id'];
 
 } elseif (
-    isset($_SESSION['role']) &&
     $_SESSION['role'] == "EMPLOYEE" &&
     isset($_SESSION['employee_id'])
 ) {
@@ -40,6 +39,7 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
 }
 
 $message = "";
+$messageClass = "success";
 
 /* UPLOAD DOCUMENT */
 
@@ -53,26 +53,64 @@ if (isset($_POST['upload'])) {
         $_FILES['document']['error'] == 0
     ) {
 
-        $file_name =
-            time() . "_" .
+        $allowed =
+        [
+            'pdf',
+            'jpg',
+            'jpeg',
+            'png',
+            'doc',
+            'docx'
+        ];
+
+        $extension =
+        strtolower(
+            pathinfo(
+                $_FILES['document']['name'],
+                PATHINFO_EXTENSION
+            )
+        );
+
+        if (!in_array($extension, $allowed)) {
+
+            $message =
+            "❌ Invalid File Type";
+
+            $messageClass =
+            "error";
+
+        } elseif ($_FILES['document']['size'] > 10485760) {
+
+            $message =
+            "❌ File Too Large (Max 10MB)";
+
+            $messageClass =
+            "error";
+
+        } else {
+
+            $file_name =
+            time() .
+            "_" .
             preg_replace(
                 "/[^a-zA-Z0-9._-]/",
                 "_",
                 $_FILES['document']['name']
             );
 
-        $target =
+            $target =
             "uploads/documents/" .
             $file_name;
 
-        if (
-            move_uploaded_file(
-                $_FILES['document']['tmp_name'],
-                $target
-            )
-        ) {
+            if (
+                move_uploaded_file(
+                    $_FILES['document']['tmp_name'],
+                    $target
+                )
+            ) {
 
-            $stmt = $conn->prepare(
+                $stmt =
+                $conn->prepare(
                 "INSERT INTO employee_documents
                 (
                     employee_id,
@@ -84,39 +122,41 @@ if (isset($_POST['upload'])) {
                 (
                     ?, ?, ?, ?
                 )"
-            );
+                );
 
-            $stmt->bind_param(
-                "ssss",
-                $employee_id,
-                $document_name,
-                $document_type,
-                $file_name
-            );
+                $stmt->bind_param(
+                    "ssss",
+                    $employee_id,
+                    $document_name,
+                    $document_type,
+                    $file_name
+                );
 
-            if ($stmt->execute()) {
+                if ($stmt->execute()) {
 
-                $message =
-                "✅ Document Uploaded Successfully";
+                    $message =
+                    "✅ Document Uploaded Successfully";
+
+                } else {
+
+                    $message =
+                    "❌ Database Insert Failed";
+
+                    $messageClass =
+                    "error";
+                }
+
+                $stmt->close();
 
             } else {
 
                 $message =
-                "❌ Database Insert Failed";
+                "❌ Upload Failed";
+
+                $messageClass =
+                "error";
             }
-
-            $stmt->close();
-
-        } else {
-
-            $message =
-            "❌ File Upload Failed";
         }
-
-    } else {
-
-        $message =
-        "❌ Please Select A File";
     }
 }
 
@@ -127,12 +167,14 @@ if (
     $_SESSION['role'] == "CEO"
 ) {
 
-    $delete_id = intval($_GET['delete']);
+    $delete_id =
+    intval($_GET['delete']);
 
-    $stmt = $conn->prepare(
-        "SELECT file_name
-        FROM employee_documents
-        WHERE id=?"
+    $stmt =
+    $conn->prepare(
+    "SELECT file_name
+     FROM employee_documents
+     WHERE id=?"
     );
 
     $stmt->bind_param(
@@ -155,14 +197,13 @@ if (
         $doc['file_name'];
 
         if (file_exists($filepath)) {
-
             unlink($filepath);
         }
 
         $deleteStmt =
         $conn->prepare(
-            "DELETE FROM employee_documents
-            WHERE id=?"
+        "DELETE FROM employee_documents
+         WHERE id=?"
         );
 
         $deleteStmt->bind_param(
@@ -175,8 +216,8 @@ if (
     }
 
     header(
-        "Location: upload_documents.php?id=" .
-        urlencode($employee_id)
+    "Location: upload_documents.php?id=" .
+    urlencode($employee_id)
     );
 
     exit();
@@ -184,11 +225,12 @@ if (
 
 /* FETCH DOCUMENTS */
 
-$stmt = $conn->prepare(
-    "SELECT *
-    FROM employee_documents
-    WHERE employee_id=?
-    ORDER BY id DESC"
+$stmt =
+$conn->prepare(
+"SELECT *
+ FROM employee_documents
+ WHERE employee_id=?
+ ORDER BY id DESC"
 );
 
 $stmt->bind_param(
@@ -224,7 +266,6 @@ margin:0;
 
 h1{
 color:#22d3ee;
-margin-bottom:20px;
 }
 
 .card{
@@ -239,10 +280,10 @@ select{
 width:100%;
 padding:12px;
 margin:10px 0;
-border:none;
-border-radius:8px;
 background:#0f172a;
 color:white;
+border:none;
+border-radius:8px;
 box-sizing:border-box;
 }
 
@@ -261,6 +302,13 @@ background:#0891b2;
 
 .success{
 background:#14532d;
+padding:12px;
+border-radius:8px;
+margin-bottom:15px;
+}
+
+.error{
+background:#7f1d1d;
 padding:12px;
 border-radius:8px;
 margin-bottom:15px;
@@ -313,30 +361,28 @@ border-radius:8px;
 
 <h1>📄 Employee Documents</h1>
 
-<?php
-if (!empty($message)) {
-    echo "<div class='success'>$message</div>";
-}
-?>
+<?php if(!empty($message)){ ?>
+
+<div class="<?php echo $messageClass; ?>">
+<?php echo $message; ?>
+</div>
+
+<?php } ?>
 
 <div class="card">
 
 <form method="POST" enctype="multipart/form-data">
 
-<select
-name="document_type"
-required>
+<select name="document_type" required>
 
-<option value="">
-Select Document Type
-</option>
+<option value="">Select Document Type</option>
 
-<option value="Resume">Resume</option>
-<option value="PAN Card">PAN Card</option>
-<option value="Aadhaar Card">Aadhaar Card</option>
-<option value="Certificate">Certificate</option>
-<option value="Offer Letter">Offer Letter</option>
-<option value="Other">Other</option>
+<option>Resume</option>
+<option>PAN Card</option>
+<option>Aadhaar Card</option>
+<option>Certificate</option>
+<option>Offer Letter</option>
+<option>Other</option>
 
 </select>
 
@@ -372,7 +418,7 @@ name="upload">
 <th>Name</th>
 <th>Download</th>
 
-<?php if ($_SESSION['role'] == "CEO") { ?>
+<?php if($_SESSION['role']=="CEO"){ ?>
 <th>Delete</th>
 <?php } ?>
 
@@ -380,9 +426,9 @@ name="upload">
 
 <?php
 
-if ($documents && $documents->num_rows > 0) {
+if($documents && $documents->num_rows > 0){
 
-    while ($doc = $documents->fetch_assoc()) {
+while($doc = $documents->fetch_assoc()){
 
 ?>
 
@@ -398,7 +444,7 @@ if ($documents && $documents->num_rows > 0) {
 
 <a
 class="download"
-href="uploads/documents/<?php echo urlencode($doc['file_name']); ?>"
+href="uploads/documents/<?php echo rawurlencode($doc['file_name']); ?>"
 download>
 
 ⬇ Download
@@ -407,7 +453,7 @@ download>
 
 </td>
 
-<?php if ($_SESSION['role'] == "CEO") { ?>
+<?php if($_SESSION['role']=="CEO"){ ?>
 
 <td>
 
@@ -428,48 +474,38 @@ onclick="return confirm('Delete this document?')">
 
 <?php
 
-    }
+}
 
-} else {
+}else{
 
 ?>
 
 <tr>
 
-<td colspan="5" style="text-align:center;">
+<td colspan="<?php echo ($_SESSION['role']=="CEO") ? 5 : 4; ?>">
+
 No Documents Uploaded
+
 </td>
 
 </tr>
 
-<?php
-
-}
-
-?>
+<?php } ?>
 
 </table>
 
 <br>
 
-<?php if ($_SESSION['role'] == "CEO") { ?>
+<?php if($_SESSION['role']=="CEO"){ ?>
 
-<a
-class="back"
-href="employees.php">
-
+<a class="back" href="employees.php">
 ⬅ Back To Employees
-
 </a>
 
 <?php } else { ?>
 
-<a
-class="back"
-href="employee_dashboard.php">
-
+<a class="back" href="employee_dashboard.php">
 ⬅ Back To Dashboard
-
 </a>
 
 <?php } ?>
