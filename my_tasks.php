@@ -1,11 +1,9 @@
-
 <?php
 
 session_start();
 
-if(!isset($_SESSION['employee_id']))
-{
-    header("Location:index.php");
+if (!isset($_SESSION['employee_id'])) {
+    header("Location: index.php");
     exit();
 }
 
@@ -13,16 +11,24 @@ include 'db.php';
 
 $employee_id = $_SESSION['employee_id'];
 
-$result = $conn->query(
-"SELECT *
-FROM tasks
-WHERE employee_id='$employee_id'
-ORDER BY id DESC"
-);
+$stmt = $conn->prepare("
+    SELECT *
+    FROM tasks
+    WHERE employee_id = ?
+    ORDER BY id DESC
+");
+
+$stmt->bind_param("s", $employee_id);
+$stmt->execute();
+
+$result = $stmt->get_result();
+
+$total_tasks = $result->num_rows;
 
 ?>
 
 <!DOCTYPE html>
+
 <html>
 
 <head>
@@ -36,7 +42,7 @@ ORDER BY id DESC"
 
 body{
 background:#020617;
-font-family:'Segoe UI';
+font-family:'Segoe UI',sans-serif;
 color:white;
 padding:30px;
 margin:0;
@@ -46,12 +52,22 @@ margin:0;
 display:flex;
 justify-content:space-between;
 align-items:center;
+flex-wrap:wrap;
+gap:15px;
 margin-bottom:25px;
 }
 
 h1{
 color:#22d3ee;
 margin:0;
+}
+
+.task-count{
+background:#1e293b;
+padding:10px 15px;
+border-radius:10px;
+font-weight:bold;
+color:#22d3ee;
 }
 
 .dashboard-btn{
@@ -92,6 +108,7 @@ margin-bottom:10px;
 
 .task p{
 margin:8px 0;
+line-height:1.6;
 }
 
 .pending{
@@ -144,40 +161,39 @@ font-size:18px;
 
 <h1>📋 My Tasks</h1>
 
+<div class="task-count">
+Total Tasks: <?php echo $total_tasks; ?>
+</div>
+
 <a
 class="dashboard-btn"
 href="employee_dashboard.php">
-
-🏠 Dashboard
-
-</a>
+🏠 Dashboard </a>
 
 </div>
 
 <?php
 
-if($result && $result->num_rows > 0)
-{
+if ($result && $result->num_rows > 0) {
 
-while($row = $result->fetch_assoc())
-{
+while ($row = $result->fetch_assoc()) {
 
 ?>
 
 <div class="task">
 
 <h3>
-<?php echo $row['task_title']; ?>
+<?php echo htmlspecialchars($row['task_title']); ?>
 </h3>
 
 <p>
 <b>Description:</b>
-<?php echo $row['task_description']; ?>
+<?php echo nl2br(htmlspecialchars($row['task_description'])); ?>
 </p>
 
 <p>
 <b>Deadline:</b>
-<?php echo $row['deadline']; ?>
+<?php echo htmlspecialchars($row['deadline']); ?>
 </p>
 
 <p>
@@ -186,17 +202,18 @@ while($row = $result->fetch_assoc())
 
 <?php
 
-if($row['status']=="Pending")
-{
+if ($row['status'] == "Pending") {
+
 echo "<span class='pending'>🟡 Pending</span>";
-}
-elseif($row['status']=="In Progress")
-{
+
+} elseif ($row['status'] == "In Progress") {
+
 echo "<span class='progress'>🔵 In Progress</span>";
-}
-else
-{
+
+} else {
+
 echo "<span class='completed'>🟢 Completed</span>";
+
 }
 
 ?>
@@ -206,10 +223,7 @@ echo "<span class='completed'>🟢 Completed</span>";
 <a
 class="update-btn"
 href="update_task.php?id=<?php echo $row['id']; ?>">
-
-✏ Update Status
-
-</a>
+✏ Update Status </a>
 
 </div>
 
@@ -217,27 +231,23 @@ href="update_task.php?id=<?php echo $row['id']; ?>">
 
 }
 
-}
-else
-{
+} else {
 
 ?>
 
 <div class="no-task">
-
 📭 No Tasks Assigned Yet
-
 </div>
 
 <?php
 
 }
+
+$stmt->close();
 
 ?>
 
 </div>
 
 </body>
-
 </html>
-
