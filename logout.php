@@ -1,37 +1,36 @@
-```php
 <?php
 
 session_start();
 
-/* REMOVE ALL SESSION VARIABLES */
+/* Clear all session data */
+$_SESSION = array();
 
-session_unset();
+/* Delete session cookie */
+if (ini_get('session.use_cookies')) {
 
-/* DESTROY SESSION */
-
-session_destroy();
-
-/* REMOVE SESSION COOKIE */
-
-if (ini_get("session.use_cookies"))
-{
     $params = session_get_cookie_params();
 
     setcookie(
         session_name(),
         '',
-        time() - 42000,
-        $params["path"],
-        $params["domain"],
-        $params["secure"],
-        $params["httponly"]
+        time() - 3600,
+        $params['path'],
+        $params['domain'],
+        $params['secure'],
+        $params['httponly']
     );
 }
 
-/* REDIRECT */
+/* Destroy session */
+session_destroy();
 
-header("Location:index.php");
+/* Prevent caching */
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Pragma: no-cache");
+header("Expires: Sat, 01 Jan 2000 00:00:00 GMT");
+
+/* Redirect to login page */
+header("Location: index.php");
 exit();
 
 ?>
-```
