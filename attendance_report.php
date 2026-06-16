@@ -1,4 +1,3 @@
-
 <?php
 
 session_start();
@@ -228,4 +227,3 @@ else
 </body>
 
 </html>
-
