@@ -2,82 +2,152 @@
 
 session_start();
 
-if(!isset($_SESSION['employee_id']))
-{
-    header("Location:index.php");
+if (!isset($_SESSION['employee_id'])) {
+    header("Location: index.php");
     exit();
 }
 
 include 'db.php';
 
-$message = "";
-
-$employee_id = $_SESSION['employee_id'];
+$employee_id   = $_SESSION['employee_id'];
 $employee_name = $_SESSION['employee_name'];
 
 $date = date("Y-m-d");
 $time = date("H:i:s");
 
-$todayAttendance = $conn->query(
-"SELECT * FROM attendance
-WHERE employee_id='$employee_id'
-AND attendance_date='$date'"
+$message = "";
+$message_type = "success";
+
+/* FETCH TODAY ATTENDANCE */
+
+$stmt = $conn->prepare(
+    "SELECT *
+     FROM attendance
+     WHERE employee_id = ?
+     AND attendance_date = ?"
 );
 
-$today = $todayAttendance->fetch_assoc();
+$stmt->bind_param(
+    "ss",
+    $employee_id,
+    $date
+);
 
-if(isset($_POST['checkin']))
-{
-    $check = $conn->query(
-    "SELECT * FROM attendance
-    WHERE employee_id='$employee_id'
-    AND attendance_date='$date'"
-    );
+$stmt->execute();
+$result = $stmt->get_result();
+$today = $result->fetch_assoc();
 
-    if($check->num_rows == 0)
-    {
-        $conn->query(
-        "INSERT INTO attendance
-        (
-        employee_id,
-        employee_name,
-        attendance_date,
-        check_in,
-        status
-        )
-        VALUES
-        (
-        '$employee_id',
-        '$employee_name',
-        '$date',
-        '$time',
-        'Present'
-        )"
+/* CHECK IN */
+
+if (isset($_POST['checkin'])) {
+
+    if (!$today) {
+
+        $stmt = $conn->prepare(
+            "INSERT INTO attendance
+            (
+                employee_id,
+                employee_name,
+                attendance_date,
+                check_in,
+                status
+            )
+            VALUES
+            (
+                ?, ?, ?, ?, 'Present'
+            )"
         );
 
-        $message = "✅ Check In Successful";
+        $stmt->bind_param(
+            "ssss",
+            $employee_id,
+            $employee_name,
+            $date,
+            $time
+        );
 
-        header("Refresh:1");
-    }
-    else
-    {
-        $message = "⚠ Already Checked In Today";
+        if ($stmt->execute()) {
+
+            $message = "✅ Check In Successful";
+
+            header("Refresh:1");
+        } else {
+
+            $message = "❌ Check In Failed";
+            $message_type = "error";
+        }
+
+    } else {
+
+        $message = "⚠ You have already checked in today";
+        $message_type = "error";
     }
 }
 
-if(isset($_POST['checkout']))
-{
-    $conn->query(
-    "UPDATE attendance
-    SET check_out='$time'
-    WHERE employee_id='$employee_id'
-    AND attendance_date='$date'"
-    );
+/* CHECK OUT */
 
-    $message = "✅ Check Out Successful";
+if (isset($_POST['checkout'])) {
 
-    header("Refresh:1");
+    if ($today) {
+
+        if (empty($today['check_out'])) {
+
+            $stmt = $conn->prepare(
+                "UPDATE attendance
+                 SET check_out=?
+                 WHERE employee_id=?
+                 AND attendance_date=?"
+            );
+
+            $stmt->bind_param(
+                "sss",
+                $time,
+                $employee_id,
+                $date
+            );
+
+            if ($stmt->execute()) {
+
+                $message = "✅ Check Out Successful";
+
+                header("Refresh:1");
+            } else {
+
+                $message = "❌ Check Out Failed";
+                $message_type = "error";
+            }
+
+        } else {
+
+            $message = "⚠ Already Checked Out";
+            $message_type = "error";
+        }
+
+    } else {
+
+        $message = "⚠ Please Check In First";
+        $message_type = "error";
+    }
 }
+
+/* RELOAD TODAY STATUS */
+
+$stmt = $conn->prepare(
+    "SELECT *
+     FROM attendance
+     WHERE employee_id = ?
+     AND attendance_date = ?"
+);
+
+$stmt->bind_param(
+    "ss",
+    $employee_id,
+    $date
+);
+
+$stmt->execute();
+$result = $stmt->get_result();
+$today = $result->fetch_assoc();
 
 ?>
 
@@ -85,6 +155,8 @@ if(isset($_POST['checkout']))
 <html>
 
 <head>
+
+<meta charset="UTF-8">
 
 <title>Attendance System</title>
 
@@ -100,11 +172,11 @@ margin:0;
 
 .dashboard-btn{
 display:inline-block;
-padding:10px 15px;
+padding:12px 18px;
 background:#22c55e;
 color:white;
 text-decoration:none;
-border-radius:8px;
+border-radius:10px;
 margin-bottom:20px;
 }
 
@@ -113,17 +185,17 @@ background:#16a34a;
 }
 
 .box{
-max-width:700px;
+max-width:750px;
 margin:auto;
 background:#1e293b;
 padding:30px;
 border-radius:20px;
-text-align:center;
 }
 
 h1{
+text-align:center;
 color:#22d3ee;
-margin-bottom:20px;
+margin-bottom:25px;
 }
 
 .info{
@@ -133,14 +205,34 @@ border-radius:10px;
 margin-bottom:15px;
 }
 
+.message{
+padding:15px;
+border-radius:10px;
+margin-bottom:20px;
+font-weight:bold;
+}
+
+.success{
+background:#14532d;
+}
+
+.error{
+background:#7f1d1d;
+}
+
+.actions{
+text-align:center;
+margin-top:20px;
+}
+
 button{
-padding:15px 30px;
-margin:10px;
+padding:15px 25px;
 border:none;
 border-radius:10px;
-cursor:pointer;
 font-size:16px;
 font-weight:bold;
+cursor:pointer;
+margin:10px;
 }
 
 .checkin{
@@ -153,17 +245,21 @@ background:#ef4444;
 color:white;
 }
 
-.message{
-margin:20px 0;
-font-size:18px;
-color:#22d3ee;
+button:disabled{
+background:#64748b;
+cursor:not-allowed;
 }
 
 .status{
 background:#0f172a;
-padding:15px;
-border-radius:10px;
-margin-top:20px;
+padding:20px;
+border-radius:12px;
+margin-top:25px;
+}
+
+.status h3{
+color:#22d3ee;
+margin-top:0;
 }
 
 </style>
@@ -181,20 +277,24 @@ margin-top:20px;
 <h1>🕒 Attendance System</h1>
 
 <div class="info">
-<b>Employee:</b> <?php echo $employee_name; ?>
+<b>Employee :</b> <?php echo htmlspecialchars($employee_name); ?>
 </div>
 
 <div class="info">
-<b>Date:</b> <?php echo $date; ?>
+<b>Employee ID :</b> <?php echo htmlspecialchars($employee_id); ?>
 </div>
 
 <div class="info">
-<b>Current Time:</b> <?php echo date("h:i:s A"); ?>
+<b>Date :</b> <?php echo $date; ?>
 </div>
 
-<?php if(!empty($message)) { ?>
+<div class="info">
+<b>Current Time :</b> <?php echo date("h:i:s A"); ?>
+</div>
 
-<div class="message">
+<?php if(!empty($message)){ ?>
+
+<div class="message <?php echo $message_type; ?>">
 <?php echo $message; ?>
 </div>
 
@@ -202,23 +302,32 @@ margin-top:20px;
 
 <form method="POST">
 
+<div class="actions">
+
 <button
+type="submit"
+name="checkin"
 class="checkin"
-type="submit"
-name="checkin">
-
+<?php if($today){ echo "disabled"; } ?>
+>
 ✅ Check In
-
 </button>
 
 <button
-class="checkout"
 type="submit"
-name="checkout">
-
+name="checkout"
+class="checkout"
+<?php
+if(!$today || !empty($today['check_out']))
+{
+    echo "disabled";
+}
+?>
+>
 🚪 Check Out
-
 </button>
+
+</div>
 
 </form>
 
@@ -231,11 +340,18 @@ name="checkout">
 if($today)
 {
     echo "<p><b>Status:</b> ".$today['status']."</p>";
-    echo "<p><b>Check In:</b> ".$today['check_in']."</p>";
+
+    echo "<p><b>Check In:</b> ".
+    $today['check_in']."</p>";
 
     if(!empty($today['check_out']))
     {
-        echo "<p><b>Check Out:</b> ".$today['check_out']."</p>";
+        echo "<p><b>Check Out:</b> ".
+        $today['check_out']."</p>";
+    }
+    else
+    {
+        echo "<p><b>Check Out:</b> Not Yet</p>";
     }
 }
 else
